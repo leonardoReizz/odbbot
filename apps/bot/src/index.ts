@@ -76,12 +76,19 @@ async function getVideoInfo(query: string): Promise<VideoInfo> {
     // If it's a search query, use ytsearch: prefix
     const searchQuery = isYouTubeUrl(query) ? query : `ytsearch1:${query}`;
 
-    const proc = spawn("yt-dlp", [
+    const args = [
       "--dump-json",
       "--no-playlist",
       "--no-warnings",
       searchQuery,
-    ]);
+    ];
+
+    // Add OAuth token if available
+    if (process.env.YT_DLP_OAUTH_TOKEN) {
+      args.unshift("--username", "oauth", "--password", process.env.YT_DLP_OAUTH_TOKEN);
+    }
+
+    const proc = spawn("yt-dlp", args);
 
     let data = "";
     proc.stdout.on("data", (chunk) => {
@@ -113,13 +120,20 @@ async function getVideoInfo(query: string): Promise<VideoInfo> {
 }
 
 function getAudioStream(url: string) {
-  const proc = spawn("yt-dlp", [
+  const args = [
     "-f", "bestaudio",
     "-o", "-",
     "--no-playlist",
     "--no-warnings",
     url,
-  ]);
+  ];
+
+  // Add OAuth token if available
+  if (process.env.YT_DLP_OAUTH_TOKEN) {
+    args.unshift("--username", "oauth", "--password", process.env.YT_DLP_OAUTH_TOKEN);
+  }
+
+  const proc = spawn("yt-dlp", args);
 
   proc.stderr.on("data", (chunk) => {
     console.error("yt-dlp stderr:", chunk.toString());
