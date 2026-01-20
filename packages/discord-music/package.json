@@ -1,0 +1,37 @@
+{
+  "name": "@bot-discord/music",
+  "version": "0.1.0",
+  "description": "Discord music player library",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["discord", "music", "voice", "audio", "player"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.17.0",
+    "discord.js": "^14.16.0"
+  },
+  "peerDependencies": {
+    "discord.js": "^14.0.0"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "bot-discord",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Discord music bot with reusable library",
+  "scripts": {
+    "dev": "pnpm --filter @bot-discord/bot dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint"
+  },
+  "keywords": ["discord", "music", "bot"],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.22.0"
+}
