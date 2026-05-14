@@ -24,7 +24,7 @@ COPY packages/discord-music/package.json ./packages/discord-music/
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Copy source code
+# Copy source code (includes cookies.txt if present)
 COPY . .
 
 # Build packages
@@ -35,5 +35,6 @@ WORKDIR /app/apps/bot
 
 # Token must be passed as environment variable
 ENV NODE_ENV=production
+ENV YT_DLP_COOKIES_FILE=/app/cookies.txt
 
 CMD ["node", "dist/index.js"]

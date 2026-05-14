@@ -6,305 +6,181 @@ import {
   Routes,
   SlashCommandBuilder,
 } from "discord.js";
-import { MusicPlayer } from "@bot-discord/music";
-import { spawn } from "child_process";
+import { LavalinkManager } from "lavalink-client";
 import "dotenv/config";
 
 const commands = [
   new SlashCommandBuilder()
     .setName("play")
-    .setDescription("Play a song from YouTube")
-    .addStringOption((option) =>
-      option
-        .setName("query")
-        .setDescription("YouTube URL or search query")
-        .setRequired(true)
+    .setDescription("Tocar uma música do YouTube")
+    .addStringOption((o) =>
+      o.setName("query").setDescription("URL ou nome da música").setRequired(true)
     ),
-  new SlashCommandBuilder()
-    .setName("join")
-    .setDescription("Join your voice channel"),
-  new SlashCommandBuilder()
-    .setName("leave")
-    .setDescription("Leave the voice channel"),
-  new SlashCommandBuilder().setName("skip").setDescription("Skip current track"),
-  new SlashCommandBuilder().setName("pause").setDescription("Pause playback"),
-  new SlashCommandBuilder().setName("resume").setDescription("Resume playback"),
-  new SlashCommandBuilder()
-    .setName("stop")
-    .setDescription("Stop and clear the queue"),
-  new SlashCommandBuilder().setName("queue").setDescription("Show the queue"),
-].map((command) => command.toJSON());
+  new SlashCommandBuilder().setName("skip").setDescription("Pular a música atual"),
+  new SlashCommandBuilder().setName("pause").setDescription("Pausar"),
+  new SlashCommandBuilder().setName("resume").setDescription("Retomar"),
+  new SlashCommandBuilder().setName("stop").setDescription("Parar e limpar a fila"),
+  new SlashCommandBuilder().setName("queue").setDescription("Ver a fila"),
+  new SlashCommandBuilder().setName("leave").setDescription("Sair do canal de voz"),
+].map((c) => c.toJSON());
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
 });
 
-const player = new MusicPlayer({
-  leaveOnEmpty: true,
-  leaveOnEnd: true,
+const lavalink = new LavalinkManager({
+  nodes: [
+    {
+      authorization: process.env.LAVALINK_PASSWORD || "youshallnotpass",
+      host: process.env.LAVALINK_HOST || "localhost",
+      port: Number(process.env.LAVALINK_PORT) || 2333,
+      id: "main",
+    },
+  ],
+  sendToShard: (guildId: string, payload: any) =>
+    client.guilds.cache.get(guildId)?.shard?.send(payload),
+  client: { id: process.env.CLIENT_ID!, username: "ODB" },
+  playerOptions: {
+    defaultSearchPlatform: "ytsearch",
+    onDisconnect: { destroyPlayer: true },
+    onEmptyQueue: { destroyAfterMs: 30_000 },
+  },
 });
 
-player.on("trackStart", (track) => {
-  console.log(`Now playing: ${track.title}`);
+lavalink.on("trackStart", (player, track) => {
+  console.log(`Tocando: ${track.info.title}`);
 });
 
-player.on("trackEnd", (track) => {
-  console.log(`Finished playing: ${track.title}`);
+lavalink.on("trackEnd", (player, track) => {
+  console.log(`Terminou: ${track.info.title}`);
 });
 
-player.on("queueEnd", () => {
-  console.log("Queue ended");
+lavalink.on("queueEnd", (player) => {
+  console.log("Fila vazia");
 });
 
-player.on("error", (error) => {
-  console.error("Player error:", error);
-});
-
-interface VideoInfo {
-  title: string;
-  duration: number;
-  thumbnail: string;
-  url: string;
-}
-
-function isYouTubeUrl(query: string): boolean {
-  return query.includes("youtube.com") || query.includes("youtu.be");
-}
-
-async function getVideoInfo(query: string): Promise<VideoInfo> {
-  return new Promise((resolve, reject) => {
-    // If it's a search query, use ytsearch: prefix
-    const searchQuery = isYouTubeUrl(query) ? query : `ytsearch1:${query}`;
-
-    const args = [
-      "--dump-json",
-      "--no-playlist",
-      "--no-warnings",
-      searchQuery,
-    ];
-
-    // Add OAuth token if available
-    if (process.env.YT_DLP_OAUTH_TOKEN) {
-      args.unshift("--username", "oauth", "--password", process.env.YT_DLP_OAUTH_TOKEN);
-    }
-
-    const proc = spawn("yt-dlp", args);
-
-    let data = "";
-    proc.stdout.on("data", (chunk) => {
-      data += chunk;
-    });
-
-    proc.stderr.on("data", (chunk) => {
-      console.error("yt-dlp stderr:", chunk.toString());
-    });
-
-    proc.on("close", (code) => {
-      if (code !== 0) {
-        reject(new Error(`yt-dlp exited with code ${code}`));
-        return;
-      }
-      try {
-        const json = JSON.parse(data);
-        resolve({
-          title: json.title,
-          duration: json.duration || 0,
-          thumbnail: json.thumbnail,
-          url: json.webpage_url || json.url,
-        });
-      } catch (e) {
-        reject(e);
-      }
-    });
-  });
-}
-
-function getAudioStream(url: string) {
-  const args = [
-    "-f", "bestaudio",
-    "-o", "-",
-    "--no-playlist",
-    "--no-warnings",
-    url,
-  ];
-
-  // Add OAuth token if available
-  if (process.env.YT_DLP_OAUTH_TOKEN) {
-    args.unshift("--username", "oauth", "--password", process.env.YT_DLP_OAUTH_TOKEN);
-  }
-
-  const proc = spawn("yt-dlp", args);
-
-  proc.stderr.on("data", (chunk) => {
-    console.error("yt-dlp stderr:", chunk.toString());
-  });
-
-  return proc.stdout;
-}
+client.on("raw", (d) => lavalink.sendRawData(d));
 
 client.once(Events.ClientReady, async (readyClient) => {
-  console.log(`Bot is ready! Logged in as ${readyClient.user.tag}`);
+  console.log(`Bot online: ${readyClient.user.tag}`);
+
+  await lavalink.init({ id: readyClient.user.id, username: readyClient.user.username });
 
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN!);
-
-  try {
-    console.log("Registering slash commands...");
-
-    for (const guild of readyClient.guilds.cache.values()) {
-      await rest.put(
-        Routes.applicationGuildCommands(readyClient.user.id, guild.id),
-        { body: commands }
-      );
-      console.log(`Commands registered for guild: ${guild.name}`);
-    }
-    console.log("Slash commands registered successfully!");
-  } catch (error) {
-    console.error("Failed to register slash commands:", error);
+  for (const guild of readyClient.guilds.cache.values()) {
+    await rest.put(Routes.applicationGuildCommands(readyClient.user.id, guild.id), {
+      body: commands,
+    });
   }
+  console.log("Comandos registrados!");
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-  if (!interaction.guild) return;
+  if (!interaction.isChatInputCommand() || !interaction.guild) return;
 
-  const command = interaction.commandName;
+  const { commandName, guild } = interaction;
 
-  try {
-    if (command === "play") {
-      const query = interaction.options.getString("query", true);
-      const member = interaction.guild.members.cache.get(interaction.user.id);
-      const voiceChannel = member?.voice.channel;
+  if (commandName === "play") {
+    const query = interaction.options.getString("query", true);
+    const member = guild.members.cache.get(interaction.user.id);
+    const voiceChannel = member?.voice.channel;
 
-      if (!voiceChannel) {
-        await interaction.reply({
-          content: "You need to be in a voice channel!",
-          ephemeral: true,
-        });
-        return;
+    if (!voiceChannel) {
+      return void interaction.reply({ content: "Entre em um canal de voz primeiro!", ephemeral: true });
+    }
+
+    await interaction.deferReply();
+
+    try {
+      const player = lavalink.createPlayer({
+        guildId: guild.id,
+        voiceChannelId: voiceChannel.id,
+        textChannelId: interaction.channelId,
+        selfDeaf: true,
+      });
+
+      if (!player.connected) await player.connect();
+
+      const result = await player.search({ query }, interaction.user);
+
+      if (!result.tracks.length) {
+        return void interaction.editReply("Nenhum resultado encontrado.");
       }
 
-      await interaction.deferReply();
+      const track = result.tracks[0];
+      await player.queue.add(track);
 
-      try {
-        // Connect to voice channel if not already connected
-        if (!player.getQueue(interaction.guild.id)) {
-          await player.connect(voiceChannel);
-        }
+      if (!player.playing) await player.play();
 
-        // Get video info (works with URL or search query)
-        const info = await getVideoInfo(query);
+      await interaction.editReply(`Adicionado: **${track.info.title}**`);
+    } catch (err) {
+      console.error("Erro ao tocar:", err);
+      await interaction.editReply("Erro ao tocar a música.");
+    }
+    return;
+  }
 
-        // Get audio stream using the resolved URL
-        const stream = getAudioStream(info.url);
+  if (commandName === "skip") {
+    const player = lavalink.getPlayer(guild.id);
+    if (!player) return void interaction.reply("Não estou tocando nada.");
+    await player.skip();
+    await interaction.reply("Pulado!");
+    return;
+  }
 
-        const track = {
-          title: info.title,
-          url: stream,
-          duration: info.duration,
-          thumbnail: info.thumbnail,
-          requestedBy: interaction.user.tag,
-        };
+  if (commandName === "pause") {
+    const player = lavalink.getPlayer(guild.id);
+    if (!player) return void interaction.reply("Não estou tocando nada.");
+    await player.pause();
+    await interaction.reply("Pausado!");
+    return;
+  }
 
-        await player.play(interaction.guild.id, track);
+  if (commandName === "resume") {
+    const player = lavalink.getPlayer(guild.id);
+    if (!player) return void interaction.reply("Não estou tocando nada.");
+    await player.resume();
+    await interaction.reply("Retomado!");
+    return;
+  }
 
-        await interaction.editReply(`Added to queue: **${track.title}**`);
-      } catch (error) {
-        console.error("Error playing track:", error);
-        await interaction.editReply("Failed to play the track.");
-      }
+  if (commandName === "stop") {
+    const player = lavalink.getPlayer(guild.id);
+    if (!player) return void interaction.reply("Não estou tocando nada.");
+    await player.destroy();
+    await interaction.reply("Parado e fila limpa.");
+    return;
+  }
+
+  if (commandName === "leave") {
+    const player = lavalink.getPlayer(guild.id);
+    if (!player) return void interaction.reply("Não estou em nenhum canal.");
+    await player.destroy();
+    await interaction.reply("Saí do canal.");
+    return;
+  }
+
+  if (commandName === "queue") {
+    const player = lavalink.getPlayer(guild.id);
+    if (!player?.queue.current) return void interaction.reply("A fila está vazia.");
+
+    const current = player.queue.current;
+    const tracks = player.queue.tracks.slice(0, 10);
+
+    let msg = `**Tocando agora:** ${current.info.title}\n`;
+    if (tracks.length) {
+      msg += "\n**Fila:**\n" + tracks.map((t, i) => `${i + 1}. ${t.info.title}`).join("\n");
+      if (player.queue.tracks.length > 10) msg += `\n...e mais ${player.queue.tracks.length - 10}`;
     }
 
-    if (command === "join") {
-      const member = interaction.guild.members.cache.get(interaction.user.id);
-      const voiceChannel = member?.voice.channel;
-
-      if (!voiceChannel) {
-        await interaction.reply({
-          content: "You need to be in a voice channel!",
-          ephemeral: true,
-        });
-        return;
-      }
-
-      try {
-        await player.connect(voiceChannel);
-        await interaction.reply(`Joined ${voiceChannel.name}!`);
-      } catch (error) {
-        console.error(error);
-        await interaction.reply({
-          content: "Failed to join the voice channel.",
-          ephemeral: true,
-        });
-      }
-    }
-
-    if (command === "leave") {
-      player.disconnect(interaction.guild.id);
-      await interaction.reply("Left the voice channel.");
-    }
-
-    if (command === "skip") {
-      const skipped = player.skip(interaction.guild.id);
-      await interaction.reply(skipped ? "Skipped!" : "Nothing to skip.");
-    }
-
-    if (command === "pause") {
-      const paused = player.pause(interaction.guild.id);
-      await interaction.reply(paused ? "Paused!" : "Failed to pause.");
-    }
-
-    if (command === "resume") {
-      const resumed = player.resume(interaction.guild.id);
-      await interaction.reply(resumed ? "Resumed!" : "Failed to resume.");
-    }
-
-    if (command === "stop") {
-      player.stop(interaction.guild.id);
-      await interaction.reply("Stopped and cleared the queue.");
-    }
-
-    if (command === "queue") {
-      const queue = player.getQueue(interaction.guild.id);
-      const currentTrack = player.getCurrentTrack(interaction.guild.id);
-
-      if (!queue || (queue.isEmpty && !currentTrack)) {
-        await interaction.reply("The queue is empty.");
-        return;
-      }
-
-      let response = "";
-      if (currentTrack) {
-        response += `**Now playing:** ${currentTrack.title}\n\n`;
-      }
-
-      const tracks = queue.getAll();
-      if (tracks.length > 0) {
-        response += "**Queue:**\n";
-        tracks.slice(0, 10).forEach((track, index) => {
-          response += `${index + 1}. ${track.title}\n`;
-        });
-
-        if (tracks.length > 10) {
-          response += `\n...and ${tracks.length - 10} more`;
-        }
-      }
-
-      await interaction.reply(response || "The queue is empty.");
-    }
-  } catch (error) {
-    console.error("Interaction error:", error);
-    if (interaction.replied || interaction.deferred) {
-      await interaction.editReply("An error occurred.");
-    } else {
-      await interaction.reply({ content: "An error occurred.", ephemeral: true });
-    }
+    await interaction.reply(msg);
+    return;
   }
 });
 
-const token = process.env.DISCORD_TOKEN;
-if (!token) {
-  console.error("DISCORD_TOKEN is required in .env file");
+if (!process.env.DISCORD_TOKEN) {
+  console.error("DISCORD_TOKEN não definido");
   process.exit(1);
 }
 
-client.login(token);
+client.login(process.env.DISCORD_TOKEN);

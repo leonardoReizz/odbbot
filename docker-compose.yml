@@ -1,0 +1,30 @@
+services:
+  lavalink:
+    image: ghcr.io/lavalink-devs/lavalink:4-alpine
+    container_name: lavalink
+    restart: unless-stopped
+    volumes:
+      - ./lavalink/application.yml:/opt/Lavalink/application.yml
+      - lavalink_data:/opt/Lavalink/plugins
+    networks:
+      - bot
+
+  bot:
+    build: .
+    container_name: odb-bot
+    restart: unless-stopped
+    env_file: ./apps/bot/.env
+    environment:
+      - LAVALINK_HOST=lavalink
+      - LAVALINK_PORT=2333
+      - LAVALINK_PASSWORD=youshallnotpass
+    depends_on:
+      - lavalink
+    networks:
+      - bot
+
+networks:
+  bot:
+
+volumes:
+  lavalink_data:

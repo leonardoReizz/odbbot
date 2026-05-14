@@ -9,6 +9,14 @@ dist/
 .env.local
 .env.*.local
 
+# YouTube cookies (sensitive - never commit)
+cookies.txt
+
+# Lavalink binary and data
+lavalink/Lavalink.jar
+lavalink/plugins/
+lavalink/logs/
+
 # IDE
 .vscode/
 .idea/

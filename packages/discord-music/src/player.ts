@@ -52,11 +52,20 @@ export class MusicPlayer extends EventEmitter {
         .voiceAdapterCreator as DiscordGatewayAdapterCreator,
     });
 
+    connection.on("stateChange", (oldState, newState) => {
+      console.log(`Voice connection state: ${oldState.status} -> ${newState.status}`);
+    });
+
+    connection.on("error", (err) => {
+      console.error("Voice connection error:", err);
+    });
+
     try {
       await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
-    } catch {
+    } catch (err) {
+      console.error(`Voice connection failed at state: ${connection.state.status}`, err);
       connection.destroy();
-      throw new Error("Failed to connect to voice channel");
+      throw new Error(`Failed to connect to voice channel (stuck at: ${connection.state.status})`);
     }
 
     this.connections.set(guildId, connection);
