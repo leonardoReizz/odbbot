@@ -89,7 +89,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return void interaction.reply({ content: "Entre em um canal de voz primeiro!", ephemeral: true });
     }
 
-    await interaction.deferReply();
+    try {
+      await interaction.deferReply();
+    } catch {
+      return;
+    }
 
     try {
       const player = lavalink.createPlayer({
@@ -115,65 +119,95 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.editReply(`Adicionado: **${track.info.title}**`);
     } catch (err) {
       console.error("Erro ao tocar:", err);
-      await interaction.editReply("Erro ao tocar a música.");
+      try { await interaction.editReply("Erro ao tocar a música."); } catch {}
     }
     return;
   }
 
   if (commandName === "skip") {
-    const player = lavalink.getPlayer(guild.id);
-    if (!player) return void interaction.reply("Não estou tocando nada.");
-    await player.skip();
-    await interaction.reply("Pulado!");
+    try {
+      const player = lavalink.getPlayer(guild.id);
+      if (!player) return void interaction.reply("Não estou tocando nada.");
+      await player.skip();
+      await interaction.reply("Pulado!");
+    } catch (err) {
+      console.error("Erro ao pular:", err);
+      try { await interaction.reply("Não há próxima música na fila."); } catch {}
+    }
     return;
   }
 
   if (commandName === "pause") {
-    const player = lavalink.getPlayer(guild.id);
-    if (!player) return void interaction.reply("Não estou tocando nada.");
-    await player.pause();
-    await interaction.reply("Pausado!");
+    try {
+      const player = lavalink.getPlayer(guild.id);
+      if (!player) return void interaction.reply("Não estou tocando nada.");
+      await player.pause();
+      await interaction.reply("Pausado!");
+    } catch (err) {
+      console.error("Erro ao pausar:", err);
+      try { await interaction.reply("Erro ao pausar."); } catch {}
+    }
     return;
   }
 
   if (commandName === "resume") {
-    const player = lavalink.getPlayer(guild.id);
-    if (!player) return void interaction.reply("Não estou tocando nada.");
-    await player.resume();
-    await interaction.reply("Retomado!");
+    try {
+      const player = lavalink.getPlayer(guild.id);
+      if (!player) return void interaction.reply("Não estou tocando nada.");
+      await player.resume();
+      await interaction.reply("Retomado!");
+    } catch (err) {
+      console.error("Erro ao retomar:", err);
+      try { await interaction.reply("Erro ao retomar."); } catch {}
+    }
     return;
   }
 
   if (commandName === "stop") {
-    const player = lavalink.getPlayer(guild.id);
-    if (!player) return void interaction.reply("Não estou tocando nada.");
-    await player.destroy();
-    await interaction.reply("Parado e fila limpa.");
+    try {
+      const player = lavalink.getPlayer(guild.id);
+      if (!player) return void interaction.reply("Não estou tocando nada.");
+      await player.destroy();
+      await interaction.reply("Parado e fila limpa.");
+    } catch (err) {
+      console.error("Erro ao parar:", err);
+      try { await interaction.reply("Erro ao parar."); } catch {}
+    }
     return;
   }
 
   if (commandName === "leave") {
-    const player = lavalink.getPlayer(guild.id);
-    if (!player) return void interaction.reply("Não estou em nenhum canal.");
-    await player.destroy();
-    await interaction.reply("Saí do canal.");
+    try {
+      const player = lavalink.getPlayer(guild.id);
+      if (!player) return void interaction.reply("Não estou em nenhum canal.");
+      await player.destroy();
+      await interaction.reply("Saí do canal.");
+    } catch (err) {
+      console.error("Erro ao sair:", err);
+      try { await interaction.reply("Erro ao sair do canal."); } catch {}
+    }
     return;
   }
 
   if (commandName === "queue") {
-    const player = lavalink.getPlayer(guild.id);
-    if (!player?.queue.current) return void interaction.reply("A fila está vazia.");
+    try {
+      const player = lavalink.getPlayer(guild.id);
+      if (!player?.queue.current) return void interaction.reply("A fila está vazia.");
 
-    const current = player.queue.current;
-    const tracks = player.queue.tracks.slice(0, 10);
+      const current = player.queue.current;
+      const tracks = player.queue.tracks.slice(0, 10);
 
-    let msg = `**Tocando agora:** ${current.info.title}\n`;
-    if (tracks.length) {
-      msg += "\n**Fila:**\n" + tracks.map((t, i) => `${i + 1}. ${t.info.title}`).join("\n");
-      if (player.queue.tracks.length > 10) msg += `\n...e mais ${player.queue.tracks.length - 10}`;
+      let msg = `**Tocando agora:** ${current.info.title}\n`;
+      if (tracks.length) {
+        msg += "\n**Fila:**\n" + tracks.map((t, i) => `${i + 1}. ${t.info.title}`).join("\n");
+        if (player.queue.tracks.length > 10) msg += `\n...e mais ${player.queue.tracks.length - 10}`;
+      }
+
+      await interaction.reply(msg);
+    } catch (err) {
+      console.error("Erro ao mostrar fila:", err);
+      try { await interaction.reply("Erro ao mostrar a fila."); } catch {}
     }
-
-    await interaction.reply(msg);
     return;
   }
 });
